@@ -43,6 +43,12 @@ Each tunnel definition must support:
 - Maximum delay: 30s
 - Retry count: unlimited until user manually stops the tunnel
 
+### 6.2 CLI Mode (Pre-TUI)
+- MVP must provide a non-TUI CLI mode for basic tunnel control before full TUI flow.
+- `sshelob list` must print all configured tunnels in format: `(index)type: name` (1-based index).
+- `sshelob run <indexes>` must start one or multiple tunnels by comma-separated 1-based indexes (example: `sshelob run 1,2,3`).
+- `run` mode must keep tunnels running until user stops the process.
+
 ## 7. TUI Functional Requirements
 ### 7.1 Required Actions
 - Per tunnel: `start`, `stop`, `restart`, `status`
