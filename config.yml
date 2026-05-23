@@ -1,0 +1,41 @@
+tunnels:
+  # Local tunnel example: forwards a local port to a remote service via SSH
+  # Usage: Connect to bastion.example.com and forward localhost:5433 to db.internal:5432
+  - name: local-forwarding
+    type: local
+    host: bastion.example.com
+    user: alice
+    port: 22
+    bind_addr: "127.0.0.1:5433"
+    dest_addr: "db.internal:5432"
+    key_path: ~/.ssh/id_ed25519
+    health_check:
+      interval: 10s
+      timeout: 3s
+
+  # Remote tunnel example: allows remote hosts to reach your local service via SSH bastion
+  # Usage: Connect to bastion.example.com and forward bastion:6379 to your localhost:6379
+  # This makes your local service accessible from the bastion machine
+  - name: remote-forwarding
+    type: remote
+    host: bastion.example.com
+    user: alice
+    port: 22
+    bind_addr: "127.0.0.1:6379"
+    dest_addr: "localhost:6379"
+    key_path: ~/.ssh/id_ed25519
+    health_check:
+      interval: 10s
+      timeout: 3s
+
+  # Dynamic tunnel example: sets up SOCKS proxy via SSH
+  # Usage: Connect to bastion.example.com and establish a SOCKS5 proxy on localhost:1080
+  # Route traffic through the bastion to any destination
+  - name: dynamic-socks-proxy
+    type: dynamic
+    host: bastion.example.com
+    user: alice
+    port: 22
+    bind_addr: "127.0.0.1:1080"
+    key_path: ~/.ssh/id_ed25519
+
