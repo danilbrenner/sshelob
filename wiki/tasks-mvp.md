@@ -1,9 +1,9 @@
 # sshelob MVP — Implementation Checklist
 
-## [ ] Phase 1 — Project Scaffold
-- [ ] `go mod init` with module name, add `golang.org/x/crypto`, `gopkg.in/yaml.v3`, `github.com/charmbracelet/bubbletea` deps
-- [ ] Create directory layout: `cmd/sshelob/`, `internal/config/`, `internal/tunnel/`, `internal/health/`, `internal/tui/`
-- [ ] `cmd/sshelob/main.go` — entry point: load config, init TUI, run
+## [x] Phase 1 — Project Scaffold
+- [x] `go mod init` with module name, add `golang.org/x/crypto`, `gopkg.in/yaml.v3`, `github.com/charmbracelet/bubbletea` deps
+- [x] Create directory layout: `cmd/sshelob/`, `internal/config/`, `internal/tunnel/`, `internal/health/`, `internal/tui/`
+- [x] `cmd/sshelob/main.go` — entry point: load config, init TUI, run
 
 ## [ ] Phase 2 — Config
 - [ ] Define `Config` and `TunnelDef` structs (type, host, user, port, bind/dest, key path, health block)
