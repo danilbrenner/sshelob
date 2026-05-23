@@ -5,10 +5,10 @@
 - [x] Create directory layout: `cmd/sshelob/`, `internal/config/`, `internal/tunnel/`, `internal/health/`, `internal/tui/`
 - [x] `cmd/sshelob/main.go` — entry point: load config, init TUI, run
 
-## [ ] Phase 2 — Config
-- [ ] Define `Config` and `TunnelDef` structs (type, host, user, port, bind/dest, key path, health block)
-- [ ] `config.Load(path string) (*Config, error)` — reads YAML, validates required fields, returns error with field path on failure
-- [ ] Unit tests: valid config parses correctly, missing required field returns descriptive error, unknown tunnel type returns error
+## [x] Phase 2 — Config
+- [x] Define `Config` and `TunnelDef` structs (type, host, user, port, bind/dest, key path, health block)
+- [x] `config.Load(path string) (*Config, error)` — reads YAML, validates required fields, returns error with field path on failure
+- [x] Unit tests: valid config parses correctly, missing required field returns descriptive error, unknown tunnel type returns error
 
 ## [ ] Phase 3 — Tunnel Engine
 - [ ] `TunnelState` type with states: `Stopped`, `Connecting`, `Connected`, `Reconnecting`, `Error`
