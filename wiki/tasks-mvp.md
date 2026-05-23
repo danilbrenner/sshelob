@@ -10,13 +10,13 @@
 - [x] `config.Load(path string) (*Config, error)` — reads YAML, validates required fields, returns error with field path on failure
 - [x] Unit tests: valid config parses correctly, missing required field returns descriptive error, unknown tunnel type returns error
 
-## [ ] Phase 3 — Tunnel Engine
-- [ ] `TunnelState` type with states: `Stopped`, `Connecting`, `Connected`, `Reconnecting`, `Error`
-- [ ] `Tunnel` struct wrapping a config entry + state + log ring buffer (fixed cap, e.g. 200 lines)
-- [ ] `Tunnel.Start()` — dials SSH with `golang.org/x/crypto/ssh`, opens port forward (local/remote/dynamic), blocks until disconnect, publishes state transitions
-- [ ] `Tunnel.Stop()` — cancels context, transitions to `Stopped`
-- [ ] Auto-reconnect loop: 1s initial delay, 2× backoff, max 30s, unlimited retries, stops only on `Stop()`
-- [ ] Unit tests: state transitions on start/stop, backoff timing, ring buffer wraps correctly
+## [x] Phase 3 — Tunnel Engine
+- [x] `TunnelState` type with states: `Stopped`, `Connecting`, `Connected`, `Reconnecting`, `Error`
+- [x] `Tunnel` struct wrapping a config entry + state + log ring buffer (fixed cap, e.g. 200 lines)
+- [x] `Tunnel.Start()` — dials SSH with `golang.org/x/crypto/ssh`, opens port forward (local/remote/dynamic), blocks until disconnect, publishes state transitions
+- [x] `Tunnel.Stop()` — cancels context, transitions to `Stopped`
+- [x] Auto-reconnect loop: 1s initial delay, 2× backoff, max 30s, unlimited retries, stops only on `Stop()`
+- [x] Unit tests: state transitions on start/stop, backoff timing, ring buffer wraps correctly
 
 ## [ ] Phase 4 — Health Check
 - [ ] `health.Checker` — optional TCP connect probe with configurable interval and timeout
