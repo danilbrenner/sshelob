@@ -1,0 +1,15 @@
+{
+  "agents": [
+    {
+      "name": "analytics",
+      "path": ".agents/agents/analytics.agent.md"
+    },
+    {
+      "name": "backend.dev.go",
+      "path": ".agents/agents/backend.dev.go.agent.md"
+    }
+  ],
+  "skills": [
+    ".agents/skills"
+  ]
+}
