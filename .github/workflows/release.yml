@@ -1,0 +1,265 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Tag and Branch Policy
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.validate.outputs.tag }}
+      prerelease: ${{ steps.validate.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag format, ancestry, and immutability
+        id: validate
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          stable_regex='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          beta_regex='^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$'
+
+          prerelease=false
+          if [[ "$TAG" =~ $stable_regex ]]; then
+            channel="stable"
+          elif [[ "$TAG" =~ $beta_regex ]]; then
+            channel="beta"
+            prerelease=true
+          else
+            echo "Unsupported tag format: $TAG"
+            exit 1
+          fi
+
+          git fetch --no-tags origin \
+            +refs/heads/main:refs/remotes/origin/main
+
+          if [[ "$channel" == "stable" ]]; then
+            if ! git merge-base --is-ancestor "$SHA" "origin/main"; then
+              echo "Stable tag commit is not reachable from main"
+              exit 1
+            fi
+          else
+            git fetch --no-tags origin \
+              '+refs/heads/beta/*:refs/remotes/origin/beta/*' || true
+
+            found=false
+            while IFS= read -r branch; do
+              if git merge-base --is-ancestor "$SHA" "$branch"; then
+                found=true
+                break
+              fi
+            done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin/beta/)
+
+            if [[ "$found" != "true" ]]; then
+              echo "Beta tag commit is not reachable from any beta/* branch"
+              exit 1
+            fi
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists for tag $TAG"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.2
+          args: --timeout=5m
+
+      - name: Run tests
+        run: go test ./...
+
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    needs:
+      - validate
+      - quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: tar.gz
+          - goos: linux
+            goarch: arm64
+            ext: tar.gz
+          - goos: darwin
+            goarch: amd64
+            ext: tar.gz
+          - goos: darwin
+            goarch: arm64
+            ext: tar.gz
+          - goos: windows
+            goarch: amd64
+            ext: zip
+          - goos: windows
+            goarch: arm64
+            ext: zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build and package (validation only)
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          goos="${{ matrix.goos }}"
+          goarch="${{ matrix.goarch }}"
+          ext="${{ matrix.ext }}"
+
+          outdir="dist-check/$goos-$goarch"
+          mkdir -p "$outdir"
+
+          bin_name="sshelob"
+          if [[ "$goos" == "windows" ]]; then
+            bin_name="sshelob.exe"
+          fi
+
+          GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
+            go build \
+              -trimpath \
+              -ldflags "-s -w -X main.Version=$TAG -X main.Commit=${GITHUB_SHA} -X main.BuildDate=$build_date" \
+              -o "$outdir/$bin_name" \
+              ./cmd/sshelob
+
+          archive="sshelob_${TAG}_${goos}_${goarch}.${ext}"
+          if [[ "$ext" == "tar.gz" ]]; then
+            tar -C "$outdir" -czf "$outdir/$archive" "$bin_name"
+          else
+            (cd "$outdir" && zip -q "$archive" "$bin_name")
+          fi
+
+          test -f "$outdir/$archive"
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - validate
+      - build
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build all archives and checksums
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          mkdir -p dist
+
+          targets=(
+            "linux amd64 tar.gz"
+            "linux arm64 tar.gz"
+            "darwin amd64 tar.gz"
+            "darwin arm64 tar.gz"
+            "windows amd64 zip"
+            "windows arm64 zip"
+          )
+
+          for t in "${targets[@]}"; do
+            set -- $t
+            goos="$1"
+            goarch="$2"
+            ext="$3"
+
+            stage="dist/.stage-$goos-$goarch"
+            mkdir -p "$stage"
+
+            bin_name="sshelob"
+            if [[ "$goos" == "windows" ]]; then
+              bin_name="sshelob.exe"
+            fi
+
+            GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
+              go build \
+                -trimpath \
+                -ldflags "-s -w -X main.Version=$TAG -X main.Commit=${GITHUB_SHA} -X main.BuildDate=$build_date" \
+                -o "$stage/$bin_name" \
+                ./cmd/sshelob
+
+            archive="sshelob_${TAG}_${goos}_${goarch}.${ext}"
+            if [[ "$ext" == "tar.gz" ]]; then
+              tar -C "$stage" -czf "dist/$archive" "$bin_name"
+            else
+              (cd "$stage" && zip -q "../../dist/$archive" "$bin_name")
+            fi
+          done
+
+          (cd dist && sha256sum sshelob_* | sort -k2 > checksums.txt)
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          prerelease_flag=""
+          if [[ "$PRERELEASE" == "true" ]]; then
+            prerelease_flag="--prerelease"
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes "" \
+            $prerelease_flag \
+            dist/*
