@@ -1,8 +1,14 @@
-.PHONY: build test lint cross-compile
+.PHONY: init build test lint cross-compile
 
 BINARY_NAME := sshelob
 BUILD_DIR := build
 GO ?= go
+GOBIN ?= $(shell $(GO) env GOPATH)/bin
+GOLANGCI_LINT := $(GOBIN)/golangci-lint
+GOLANGCI_LINT_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+init:
+	$(GO) install $(GOLANGCI_LINT_PKG)
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -11,8 +17,8 @@ build:
 test:
 	$(GO) test ./... -v
 
-lint:
-	golangci-lint run ./...
+lint: init
+	$(GOLANGCI_LINT) run ./...
 
 cross-compile:
 	@mkdir -p $(BUILD_DIR)
