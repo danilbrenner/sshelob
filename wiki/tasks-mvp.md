@@ -22,11 +22,11 @@
 - [x] `sshelob list` — lists configured tunnels in format `(index)type: name`
 - [x] `sshelob run <indexes>` — starts one or multiple tunnels by 1-based index and keeps running until stopped (example: `sshelob run 1,2,3`)
 
-## [ ] Phase 4 — Build & Test Pipeline
-- [ ] `Makefile` targets: `build`, `test`, `lint`, `cross-compile`
-- [ ] GitHub Actions workflow: lint + test on push/PR
-- [ ] `golangci-lint` config (`.golangci.yml`)
-- [ ] Cross-compile check: `GOOS=linux`, `GOOS=darwin`, `GOOS=windows` all produce binaries without CGO
+## [x] Phase 4 — Build & Test Pipeline
+- [x] `Makefile` targets: `build`, `test`, `lint`, `cross-compile`
+- [x] GitHub Actions workflow: lint + test on push/PR
+- [x] `golangci-lint` config (`.golangci.yml`)
+- [x] Cross-compile check: `GOOS=linux`, `GOOS=darwin`, `GOOS=windows` all produce binaries without CGO
 
 ## [ ] Phase 5 — Version & Update
 - [ ] `sshelob version` — prints `sshelob v0.x.x (commit abc1234, built YYYY-MM-DD)`, version baked in via ldflags at build time
