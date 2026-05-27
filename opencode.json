@@ -1,15 +1,11 @@
 {
-  "agents": [
-    {
-      "name": "analytics",
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "analytics": {
       "path": ".agents/agents/analytics.agent.md"
     },
-    {
-      "name": "backend.dev.go",
+    "backend.dev.go": {
       "path": ".agents/agents/backend.dev.go.agent.md"
     }
-  ],
-  "skills": [
-    ".agents/skills"
-  ]
+  }
 }
