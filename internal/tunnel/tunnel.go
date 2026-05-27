@@ -376,7 +376,12 @@ func runLocalForward(ctx context.Context, t *Tunnel, client sshClient, bindAddr,
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", bindAddr, err)
 	}
-	defer listener.Close()
+	defer func(listener net.Listener) {
+		err := listener.Close()
+		if err != nil {
+			t.logf("failed to close listener: %v", err)
+		}
+	}(listener)
 
 	t.setState(Connected)
 	t.logf("local forward listening on %s", bindAddr)
@@ -396,13 +401,23 @@ func runLocalForward(ctx context.Context, t *Tunnel, client sshClient, bindAddr,
 		}
 
 		go func(localConn net.Conn) {
-			defer localConn.Close()
+			defer func(localConn net.Conn) {
+				err := localConn.Close()
+				if err != nil {
+					t.logf("failed to close local connection: %v", err)
+				}
+			}(localConn)
 			remoteConn, dialErr := client.Dial("tcp", destAddr)
 			if dialErr != nil {
 				t.logf("dial destination %s failed: %v", destAddr, dialErr)
 				return
 			}
-			defer remoteConn.Close()
+			defer func(remoteConn net.Conn) {
+				err := remoteConn.Close()
+				if err != nil {
+					t.logf("failed to close remote connection: %v", err)
+				}
+			}(remoteConn)
 			pipeConns(localConn, remoteConn)
 		}(conn)
 	}
@@ -413,7 +428,12 @@ func runRemoteForward(ctx context.Context, t *Tunnel, client sshClient, bindAddr
 	if err != nil {
 		return fmt.Errorf("remote listen on %s: %w", bindAddr, err)
 	}
-	defer listener.Close()
+	defer func(listener net.Listener) {
+		err := listener.Close()
+		if err != nil {
+			t.logf("failed to close listener: %v", err)
+		}
+	}(listener)
 
 	t.setState(Connected)
 	t.logf("remote forward listening on %s", bindAddr)
@@ -433,13 +453,23 @@ func runRemoteForward(ctx context.Context, t *Tunnel, client sshClient, bindAddr
 		}
 
 		go func(src net.Conn) {
-			defer src.Close()
+			defer func(src net.Conn) {
+				err := src.Close()
+				if err != nil {
+					t.logf("failed to close remote connection: %v", err)
+				}
+			}(src)
 			localConn, dialErr := (&net.Dialer{}).DialContext(ctx, "tcp", destAddr)
 			if dialErr != nil {
 				t.logf("dial local destination %s failed: %v", destAddr, dialErr)
 				return
 			}
-			defer localConn.Close()
+			defer func(localConn net.Conn) {
+				err := localConn.Close()
+				if err != nil {
+					t.logf("failed to close local connection: %v", err)
+				}
+			}(localConn)
 			pipeConns(src, localConn)
 		}(remoteConn)
 	}
@@ -450,7 +480,12 @@ func runDynamicForward(ctx context.Context, t *Tunnel, client sshClient, bindAdd
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", bindAddr, err)
 	}
-	defer listener.Close()
+	defer func(listener net.Listener) {
+		err := listener.Close()
+		if err != nil {
+			t.logf("failed to close listener: %v", err)
+		}
+	}(listener)
 
 	t.setState(Connected)
 	t.logf("dynamic forward listening on %s", bindAddr)
@@ -474,7 +509,12 @@ func runDynamicForward(ctx context.Context, t *Tunnel, client sshClient, bindAdd
 }
 
 func (t *Tunnel) handleSOCKS5Conn(client sshClient, conn net.Conn) {
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			t.logf("failed to close connection: %v", err)
+		}
+	}(conn)
 
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(conn, header); err != nil {
@@ -540,7 +580,12 @@ func (t *Tunnel) handleSOCKS5Conn(client sshClient, conn net.Conn) {
 		_, _ = conn.Write([]byte{0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		return
 	}
-	defer targetConn.Close()
+	defer func(targetConn net.Conn) {
+		err := targetConn.Close()
+		if err != nil {
+			t.logf("socks5 dial %s failed: %v", destAddr, err)
+		}
+	}(targetConn)
 
 	if _, err := conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
 		return

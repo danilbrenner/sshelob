@@ -112,6 +112,73 @@ For stable network conditions:
 - Tunnel reaches `Connected` within 5 seconds after start.
 - After disconnect, tunnel auto-recovers within 35 seconds.
 
+## 12. GitHub Release Artifacts
+
+### 12.1 Trigger and Tag Rules
+- Release workflow is separate from CI (`release.yml`) and runs on tag push only.
+- Accepted stable tags: exact `vX.Y.Z`.
+- Accepted prerelease tags: exact `vX.Y.Z-beta.N`.
+- No other tag shapes trigger release builds.
+
+### 12.2 Branch Policy
+- Stable tag commit must be reachable from `main`.
+- Beta tag commit must be reachable from at least one `beta/*` branch.
+- Beta tags are allowed even if the commit is also reachable from `main`.
+
+### 12.3 Validation and Quality Gates
+- Jobs are split as: `validate` -> `quality` -> `build` -> `publish`.
+- `validate` enforces tag format and branch ancestry rules.
+- `quality` runs both lint and tests before any publishing.
+- Release publish must not run unless prior jobs pass.
+
+### 12.4 Build Matrix and Packaging
+- Build matrix targets:
+  - `linux/amd64`, `linux/arm64`
+  - `darwin/amd64`, `darwin/arm64`
+  - `windows/amd64`, `windows/arm64`
+- Matrix uses explicit `go build` with `GOOS/GOARCH` (not Makefile cross-compile target).
+- Cross-compilation runs on `ubuntu-latest`.
+- Build uses `CGO_ENABLED=0`.
+- Matrix strategy uses `fail-fast: false`.
+- Package format:
+  - Linux/macOS: `.tar.gz`
+  - Windows: `.zip`
+- Archive contents are binary-only at archive root:
+  - `sshelob` on Linux/macOS
+  - `sshelob.exe` on Windows
+
+### 12.5 Artifact Naming and Checksums
+- Artifact naming is deterministic: `sshelob_<tag>_<os>_<arch>.<ext>`.
+- Generate a single `checksums.txt` with SHA256 for every archive.
+- `checksums.txt` contains one line per archive and is sorted by filename.
+
+### 12.6 Release Publishing Policy
+- Publish GitHub Release assets directly (no duplicate Actions run artifacts).
+- Release `name` equals tag.
+- Stable releases are published with `prerelease: false`.
+- Beta releases are published with `prerelease: true`.
+- Release notes are disabled (`generate_release_notes: false`) and body is empty.
+- Releases publish immediately (`draft: false`).
+
+### 12.7 Immutability and Failure Handling
+- Tags and releases are immutable.
+- If a release run fails at any stage, the tag is treated as burned and must not be reused.
+- Recovery is done by fixing forward with a new tag:
+  - Beta: increment beta number (`-beta.N+1`)
+  - Stable: next patch version
+- If a release for a tag already exists, workflow fails instead of overwriting assets.
+
+### 12.8 Security and Workflow Controls
+- Use least-privilege GitHub Actions permissions:
+  - workflow default read-only
+  - publish job `contents: write` only
+- Use per-ref concurrency and do not cancel in-progress release runs.
+
+### 12.9 Build Metadata
+- Release builds inject ldflags for `Version`, `Commit`, and `BuildDate`.
+- Version value includes the leading `v` (example: `v0.1.0`).
+- Archive/checksum signing is out of scope for this phase.
+
 ## 13. CLI & Version
 - `sshelob version` — prints version and build info (e.g. `v0.1.0 (commit abc1234, built 2026-05-27)`).
 - `sshelob update` — fetches and installs latest stable release from GitHub Releases.

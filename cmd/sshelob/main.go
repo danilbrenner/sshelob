@@ -38,7 +38,10 @@ func main() {
 			slog.Error("list does not accept extra arguments", "usage", "sshelob [-config path] list")
 			os.Exit(1)
 		}
-		listTunnels(os.Stdout, cfg)
+		if err := listTunnels(os.Stdout, cfg); err != nil {
+			slog.Error("failed to list tunnels", "error", err)
+			os.Exit(1)
+		}
 	case "run":
 		indexes, parseErr := parseIndexes(args[1:])
 		if parseErr != nil {

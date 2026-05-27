@@ -119,7 +119,9 @@ func TestListTunnels(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	listTunnels(&out, cfg)
+	if err := listTunnels(&out, cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	got := out.String()
 	want := "(1)local: local-main\n(2)dynamic: dynamic-proxy\n"

@@ -16,17 +16,20 @@ import (
 	"github.com/danilbrenner/sshelob/internal/tunnel"
 )
 
-func listTunnels(w io.Writer, cfg *config.Config) {
+func listTunnels(w io.Writer, cfg *config.Config) error {
 	for i, tunnelDef := range cfg.Tunnels {
-		fmt.Fprintf(w, "(%d)%s: %s\n", i+1, tunnelDef.Type, tunnelDef.Name)
+		if _, err := fmt.Fprintf(w, "(%d)%s: %s\n", i+1, tunnelDef.Type, tunnelDef.Name); err != nil {
+			return fmt.Errorf("failed to write tunnel list: %w", err)
+		}
 	}
+
+	return nil
 }
 
 func parseIndexes(args []string) ([]int, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("run command requires at least one index (example: sshelob run 1,2,3)")
 	}
-
 	joined := strings.Join(args, ",")
 	parts := strings.Split(joined, ",")
 	indexes := make([]int, 0, len(parts))
