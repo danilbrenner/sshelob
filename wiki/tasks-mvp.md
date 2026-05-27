@@ -18,9 +18,9 @@
 - [x] Auto-reconnect loop: 1s initial delay, 2× backoff, max 30s, unlimited retries, stops only on `Stop()`
 - [x] Unit tests: state transitions on start/stop, backoff timing, ring buffer wraps correctly
 
-## [ ] Phase 3.x — CLI (Pre-TUI)
-- [ ] `sshelob list` — lists configured tunnels in format `(index)type: name`
-- [ ] `sshelob run <indexes>` — starts one or multiple tunnels by 1-based index and keeps running until stopped (example: `sshelob run 1,2,3`)
+## [x] Phase 3.x — CLI (Pre-TUI)
+- [x] `sshelob list` — lists configured tunnels in format `(index)type: name`
+- [x] `sshelob run <indexes>` — starts one or multiple tunnels by 1-based index and keeps running until stopped (example: `sshelob run 1,2,3`)
 
 ## [ ] Phase 4 — Health Check
 - [ ] `health.Checker` — optional TCP connect probe with configurable interval and timeout
