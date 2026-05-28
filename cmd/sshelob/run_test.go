@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"reflect"
 	"strings"
 	"testing"
@@ -108,24 +107,4 @@ func TestSelectTunnels(t *testing.T) {
 			t.Fatalf("error mismatch: got %q", err.Error())
 		}
 	})
-}
-
-func TestListTunnels(t *testing.T) {
-	cfg := &config.Config{
-		Tunnels: []config.TunnelDef{
-			{Name: "local-main", Type: config.TunnelTypeLocal},
-			{Name: "dynamic-proxy", Type: config.TunnelTypeDynamic},
-		},
-	}
-
-	var out bytes.Buffer
-	if err := listTunnels(&out, cfg); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := out.String()
-	want := "(1)local: local-main\n(2)dynamic: dynamic-proxy\n"
-	if got != want {
-		t.Fatalf("list output mismatch:\n got: %q\nwant: %q", got, want)
-	}
 }

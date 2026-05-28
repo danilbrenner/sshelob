@@ -59,10 +59,10 @@
 - [x] Inject ldflags metadata in release builds: `Version` (with leading `v`), `Commit`, `BuildDate`
 - [x] Explicitly defer artifact/checksum signing to a later phase
 
-## [ ] Phase 5 — Version & Update
-- [ ] `sshelob version` — prints `sshelob v0.x.x (commit abc1234, built YYYY-MM-DD)`, version baked in via ldflags at build time
-- [ ] `sshelob update` — fetches latest stable release from GitHub Releases, replaces binary in-place
-- [ ] Unit tests: version string format, update fetch/replace logic
+## [x] Phase 5 — Version & Update
+- [x] `sshelob version` — prints `sshelob v0.x.x (commit abc1234, built YYYY-MM-DD)`, version baked in via ldflags at build time
+- [x] `sshelob update` — fetches latest stable release from GitHub Releases, replaces binary in-place
+- [x] Unit tests: version string format, update fetch/replace logic
 
 ## [ ] Phase 6 — Bug Fixes & Enhancements
 - [ ] **Logging**: plain-text for tunnel lifecycle events (connect, reconnect, error); slog reserved for internal/fatal errors only
