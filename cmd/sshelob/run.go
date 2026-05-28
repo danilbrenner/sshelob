@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"strconv"
@@ -14,16 +13,34 @@ import (
 
 	"github.com/danilbrenner/sshelob/internal/config"
 	"github.com/danilbrenner/sshelob/internal/tunnel"
+	"github.com/spf13/cobra"
 )
 
-func listTunnels(w io.Writer, cfg *config.Config) error {
-	for i, tunnelDef := range cfg.Tunnels {
-		if _, err := fmt.Fprintf(w, "(%d)%s: %s\n", i+1, tunnelDef.Type, tunnelDef.Name); err != nil {
-			return fmt.Errorf("failed to write tunnel list: %w", err)
-		}
-	}
+func runCmd(ctx context.Context, opts *cliOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:     "run <indexes>",
+		Short:   "Run selected tunnels by 1-based indexes",
+		Args:    cobra.MinimumNArgs(1),
+		Example: "sshelob run 1,2,3",
+		RunE: func(_ *cobra.Command, args []string) error {
+			cfg, err := config.Load(opts.configPath)
+			if err != nil {
+				return err
+			}
 
-	return nil
+			indexes, err := parseIndexes(args)
+			if err != nil {
+				return err
+			}
+
+			selected, err := selectTunnels(cfg, indexes)
+			if err != nil {
+				return err
+			}
+
+			return runTunnels(ctx, selected)
+		},
+	}
 }
 
 func parseIndexes(args []string) ([]int, error) {

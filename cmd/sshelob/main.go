@@ -2,13 +2,65 @@ package main
 
 import (
 	"context"
-	"flag"
+	"io"
 	"log/slog"
+	"net/http"
 	"os"
 
-	"github.com/danilbrenner/sshelob/internal/config"
 	"github.com/danilbrenner/sshelob/internal/logging"
+	"github.com/spf13/cobra"
 )
+
+type cliDeps struct {
+	stdout io.Writer
+	client *http.Client
+
+	apiBaseURL string
+	repo       string
+}
+
+type cliOptions struct {
+	configPath string
+}
+
+func newRootCommand(ctx context.Context, deps cliDeps) *cobra.Command {
+	if deps.stdout == nil {
+		deps.stdout = os.Stdout
+	}
+	if deps.client == nil {
+		deps.client = http.DefaultClient
+	}
+	if deps.apiBaseURL == "" {
+		deps.apiBaseURL = defaultGitHubAPIBaseURL
+	}
+	if deps.repo == "" {
+		deps.repo = defaultGitHubRepo
+	}
+
+	opts := &cliOptions{}
+
+	rootCmd := &cobra.Command{
+		Use:           "sshelob",
+		Short:         "Manage SSH tunnels",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+	}
+
+	rootCmd.PersistentFlags().StringVar(&opts.configPath, "config", "config.yml", "path to YAML config file")
+
+	rootCmd.AddCommand(versionCmd(deps))
+
+	rootCmd.AddCommand(listCmd(deps, opts))
+
+	rootCmd.AddCommand(updateCmd(ctx, deps))
+
+	rootCmd.AddCommand(runCmd(ctx, opts))
+
+	return rootCmd
+}
 
 func main() {
 	stdoutHandler, stderrHandler := logging.Config()
@@ -17,50 +69,16 @@ func main() {
 
 	slog.SetDefault(logger)
 
-	configPath := flag.String("config", "config.yml", "path to YAML config file")
-	flag.Parse()
-	args := flag.Args()
+	rootCmd := newRootCommand(context.Background(), cliDeps{
+		stdout: os.Stdout,
+		client: http.DefaultClient,
 
-	if len(args) == 0 {
-		slog.Error("missing command", "usage", "sshelob [-config path] <list|run> [indexes]")
-		os.Exit(1)
-	}
+		apiBaseURL: defaultGitHubAPIBaseURL,
+		repo:       defaultGitHubRepo,
+	})
 
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		slog.Error("failed to load config", "path", *configPath, "error", err)
-		os.Exit(1)
-	}
-
-	switch args[0] {
-	case "list":
-		if len(args) > 1 {
-			slog.Error("list does not accept extra arguments", "usage", "sshelob [-config path] list")
-			os.Exit(1)
-		}
-		if err := listTunnels(os.Stdout, cfg); err != nil {
-			slog.Error("failed to list tunnels", "error", err)
-			os.Exit(1)
-		}
-	case "run":
-		indexes, parseErr := parseIndexes(args[1:])
-		if parseErr != nil {
-			slog.Error("invalid run indexes", "error", parseErr, "usage", "sshelob [-config path] run 1,2,3")
-			os.Exit(1)
-		}
-
-		selected, selectErr := selectTunnels(cfg, indexes)
-		if selectErr != nil {
-			slog.Error("failed to select tunnels", "error", selectErr)
-			os.Exit(1)
-		}
-
-		if runErr := runTunnels(context.Background(), selected); runErr != nil {
-			slog.Error("run failed", "error", runErr)
-			os.Exit(1)
-		}
-	default:
-		slog.Error("unknown command", "command", args[0], "usage", "sshelob [-config path] <list|run> [indexes]")
+	if err := rootCmd.Execute(); err != nil {
+		slog.Error("command failed", "error", err)
 		os.Exit(1)
 	}
 }
