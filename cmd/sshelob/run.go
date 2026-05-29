@@ -16,22 +16,22 @@ import (
 
 func runCmd(ctx context.Context, opts *cliOptions) *cobra.Command {
 	return &cobra.Command{
-		Use:     "run <indexes>",
-		Short:   "Run selected tunnels by 1-based indexes",
+		Use:     "run <indexes|all>",
+		Short:   "Run selected tunnels by 1-based indexes or all",
 		Args:    cobra.MinimumNArgs(1),
-		Example: "sshelob run 1,2,3",
+		Example: "sshelob run 1,2,3\nsshelob run all",
 		RunE: func(_ *cobra.Command, args []string) error {
 			cfg, err := config.Load(opts.configPath)
 			if err != nil {
 				return err
 			}
 
-			indexes, err := parseIndexes(args)
+			selection, err := parseRunSelection(args)
 			if err != nil {
 				return err
 			}
 
-			selected, err := selectTunnels(cfg, indexes)
+			selected, err := selectTunnels(cfg, selection)
 			if err != nil {
 				return err
 			}
@@ -41,10 +41,20 @@ func runCmd(ctx context.Context, opts *cliOptions) *cobra.Command {
 	}
 }
 
-func parseIndexes(args []string) ([]int, error) {
+type runSelection struct {
+	all     bool
+	indexes []int
+}
+
+func parseRunSelection(args []string) (runSelection, error) {
 	if len(args) == 0 {
-		return nil, fmt.Errorf("run command requires at least one index (example: sshelob run 1,2,3)")
+		return runSelection{}, fmt.Errorf("run command requires indexes or 'all' (examples: sshelob run 1,2,3 or sshelob run all)")
 	}
+
+	if len(args) == 1 && strings.EqualFold(strings.TrimSpace(args[0]), "all") {
+		return runSelection{all: true}, nil
+	}
+
 	joined := strings.Join(args, ",")
 	parts := strings.Split(joined, ",")
 	indexes := make([]int, 0, len(parts))
@@ -53,28 +63,38 @@ func parseIndexes(args []string) ([]int, error) {
 	for _, part := range parts {
 		value := strings.TrimSpace(part)
 		if value == "" {
-			return nil, fmt.Errorf("indexes must be comma-separated positive integers")
+			return runSelection{}, fmt.Errorf("indexes must be comma-separated positive integers")
+		}
+		if strings.EqualFold(value, "all") {
+			return runSelection{}, fmt.Errorf("'all' cannot be combined with indexes")
 		}
 
 		index, err := strconv.Atoi(value)
 		if err != nil {
-			return nil, fmt.Errorf("invalid index %q: %w", value, err)
+			return runSelection{}, fmt.Errorf("invalid index %q: %w", value, err)
 		}
 		if index < 1 {
-			return nil, fmt.Errorf("invalid index %d: indexes are 1-based", index)
+			return runSelection{}, fmt.Errorf("invalid index %d: indexes are 1-based", index)
 		}
 		if _, exists := seen[index]; exists {
-			return nil, fmt.Errorf("duplicate index %d", index)
+			return runSelection{}, fmt.Errorf("duplicate index %d", index)
 		}
 
 		seen[index] = struct{}{}
 		indexes = append(indexes, index)
 	}
 
-	return indexes, nil
+	return runSelection{indexes: indexes}, nil
 }
 
-func selectTunnels(cfg *config.Config, indexes []int) ([]config.TunnelDef, error) {
+func selectTunnels(cfg *config.Config, selection runSelection) ([]config.TunnelDef, error) {
+	if selection.all {
+		selected := make([]config.TunnelDef, len(cfg.Tunnels))
+		copy(selected, cfg.Tunnels)
+		return selected, nil
+	}
+
+	indexes := selection.indexes
 	selected := make([]config.TunnelDef, 0, len(indexes))
 	for _, index := range indexes {
 		if index > len(cfg.Tunnels) {
