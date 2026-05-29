@@ -114,9 +114,16 @@ func WithSleepFunc(fn sleepFunc) Option {
 	}
 }
 
+func WithEventWriter(writer io.Writer) Option {
+	return func(t *Tunnel) {
+		t.eventsOut = writer
+	}
+}
+
 type Tunnel struct {
 	def       config.TunnelDef
 	logBuffer *RingBuffer
+	eventsOut io.Writer
 
 	stateMu sync.RWMutex
 	state   TunnelState
@@ -135,6 +142,7 @@ func NewTunnel(def config.TunnelDef, opts ...Option) *Tunnel {
 	tunnel := &Tunnel{
 		def:       def,
 		logBuffer: NewRingBuffer(defaultLogCapacity),
+		eventsOut: io.Discard,
 		state:     Stopped,
 		stateCh:   make(chan TunnelState, 64),
 		dial:      defaultDial,
@@ -285,7 +293,12 @@ func (t *Tunnel) setState(state TunnelState) {
 }
 
 func (t *Tunnel) logf(format string, args ...any) {
-	t.logBuffer.Add(fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	t.logBuffer.Add(msg)
+	if t.eventsOut == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(t.eventsOut, "[%s] %s\n", t.def.Name, msg)
 }
 
 func defaultSleep(ctx context.Context, duration time.Duration) error {

@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"log/slog"
-
 	"github.com/danilbrenner/sshelob/internal/config"
 	"github.com/danilbrenner/sshelob/internal/tunnel"
 	"github.com/spf13/cobra"
@@ -93,7 +91,7 @@ func runTunnels(ctx context.Context, defs []config.TunnelDef) error {
 
 	tunnels := make([]*tunnel.Tunnel, 0, len(defs))
 	for _, tunnelDef := range defs {
-		tunnels = append(tunnels, tunnel.NewTunnel(tunnelDef))
+		tunnels = append(tunnels, tunnel.NewTunnel(tunnelDef, tunnel.WithEventWriter(os.Stdout)))
 	}
 
 	errCh := make(chan error, len(tunnels))
@@ -112,9 +110,13 @@ func runTunnels(ctx context.Context, defs []config.TunnelDef) error {
 		}(name, tnl)
 	}
 
-	slog.Info("tunnels started", "count", len(tunnels))
+	if _, err := fmt.Fprintf(os.Stdout, "started %d tunnel(s)\n", len(tunnels)); err != nil {
+		return fmt.Errorf("write start status: %w", err)
+	}
 	<-runCtx.Done()
-	slog.Info("stopping tunnels")
+	if _, err := fmt.Fprintln(os.Stdout, "stopping tunnels"); err != nil {
+		return fmt.Errorf("write stop status: %w", err)
+	}
 
 	for i, tnl := range tunnels {
 		if err := tnl.Stop(); err != nil {

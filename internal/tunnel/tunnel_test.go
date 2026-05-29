@@ -1,9 +1,11 @@
 package tunnel
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -144,6 +146,54 @@ func TestRingBufferWraps(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("line[%d]: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestTunnelWritesPlainTextLifecycleEvents(t *testing.T) {
+	tunnelDef := config.TunnelDef{
+		Name:     "writer-test",
+		Type:     config.TunnelTypeLocal,
+		Host:     "example.com",
+		User:     "user",
+		Port:     22,
+		BindAddr: "127.0.0.1:10002",
+		DestAddr: "localhost:80",
+		KeyPath:  "~/.ssh/id_ed25519",
+	}
+
+	var output bytes.Buffer
+	var tun *Tunnel
+
+	tun = NewTunnel(
+		tunnelDef,
+		WithEventWriter(&output),
+		WithDialFunc(func(context.Context, config.TunnelDef) (sshClient, error) {
+			return &fakeSSHClient{}, nil
+		}),
+		WithForwardFunc(func(context.Context, *Tunnel, sshClient, config.TunnelDef) error {
+			return errors.New("forward failed")
+		}),
+		WithSleepFunc(func(ctx context.Context, _ time.Duration) error {
+			_ = tun.Stop()
+			return ctx.Err()
+		}),
+	)
+
+	if err := tun.Start(); err != nil {
+		t.Fatalf("start returned error: %v", err)
+	}
+
+	got := output.String()
+	checks := []string{
+		"[writer-test] tunnel disconnected: forward failed",
+		"[writer-test] reconnecting after disconnect",
+		"[writer-test] tunnel \"writer-test\" stopped",
+	}
+
+	for _, want := range checks {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output %q does not contain %q", got, want)
 		}
 	}
 }

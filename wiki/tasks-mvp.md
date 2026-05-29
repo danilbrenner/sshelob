@@ -65,7 +65,7 @@
 - [x] Unit tests: version string format, update fetch/replace logic
 
 ## [ ] Phase 6 — Bug Fixes & Enhancements
-- [ ] **Logging**: plain-text for tunnel lifecycle events (connect, reconnect, error); slog reserved for internal/fatal errors only
+- [x] **Logging**: plain-text for tunnel lifecycle events (connect, reconnect, error);
 - [ ] **`run all` keyword**: `sshelob run all` starts all configured tunnels
 - [ ] **Config location**: `-config` flag first, fallback to `~/.config/sshelob/config.yml`; clear error showing paths checked
 - [ ] **Connections section** (breaking change): new top-level `connections:` in config with `name`, `host`, `user`, `port`, `key_path`, `use_passphrase`; tunnels reference connection by name; inline host/user/port/key removed from `TunnelDef`
