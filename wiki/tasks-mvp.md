@@ -68,7 +68,7 @@
 - [x] **Logging**: plain-text for tunnel lifecycle events (connect, reconnect, error);
 - [x] **`run all` keyword**: `sshelob run all` starts all configured tunnels
 - [x] `**Config location**: `-config` flag first, fallback to `~/.config/sshelob/config.yml`; clear error showing paths checked
-- [ ] Update README with new features, config format and install/update instructions
+- [x] Update README with new features, config format and install/update instructions
 
 ## [ ] Phase 6.1 — Connections section
 - [ ] **Connections section** (breaking change): new top-level `connections:` in config with `name`, `host`, `user`, `port`, `key_path`, `use_passphrase`; tunnels reference connection by name; inline host/user/port/key removed from `TunnelDef`
