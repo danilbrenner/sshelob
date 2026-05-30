@@ -48,7 +48,7 @@ func newRootCommand(ctx context.Context, deps cliDeps) *cobra.Command {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&opts.configPath, "config", "config.yml", "path to YAML config file")
+	rootCmd.PersistentFlags().StringVar(&opts.configPath, "config", "", "path to YAML config file (defaults to ~/.config/sshelob/config.yml)")
 
 	rootCmd.AddCommand(versionCmd(deps))
 

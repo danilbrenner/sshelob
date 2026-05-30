@@ -126,10 +126,77 @@ tunnels:
 }
 
 func TestLoad_FileNotFound(t *testing.T) {
-	_, err := config.Load(filepath.Join(t.TempDir(), "nonexistent.yml"))
+	missingPath := filepath.Join(t.TempDir(), "nonexistent.yml")
+	_, err := config.Load(missingPath)
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}
+	assertErrContains(t, err, "cannot read file")
+	assertErrContains(t, err, missingPath)
+}
+
+func TestLoad_FileNotFound_DefaultOnly(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	_, err := config.Load("")
+	if err == nil {
+		t.Fatal("expected error for missing default config")
+	}
+
+	fallbackPath := filepath.Join(homeDir, ".config", "sshelob", "config.yml")
+	assertErrContains(t, err, "cannot read file")
+	assertErrContains(t, err, fallbackPath)
+}
+
+func TestLoad_FallbackPathWhenEmpty(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	fallbackPath := filepath.Join(homeDir, ".config", "sshelob", "config.yml")
+	writeConfigAtPath(t, fallbackPath, `
+tunnels:
+  - name: fallback
+    type: dynamic
+    host: bastion.example.com
+    user: alice
+    port: 22
+    bind_addr: "127.0.0.1:1080"
+`)
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Tunnels) != 1 {
+		t.Fatalf("expected 1 tunnel, got %d", len(cfg.Tunnels))
+	}
+}
+
+func TestLoad_ExplicitMissingPathReturnsError(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	fallbackPath := filepath.Join(homeDir, ".config", "sshelob", "config.yml")
+	writeConfigAtPath(t, fallbackPath, `
+tunnels:
+  - name: fallback
+    type: local
+    host: bastion.example.com
+    user: alice
+    port: 22
+    bind_addr: ":5433"
+    dest_addr: "db:5432"
+`)
+
+	missingPath := filepath.Join(t.TempDir(), "missing.yml")
+	_, err := config.Load(missingPath)
+	if err != nil {
+		assertErrContains(t, err, "cannot read file")
+		assertErrContains(t, err, missingPath)
+		return
+	}
+	t.Fatal("expected error for missing explicit config path")
 }
 
 func TestLoad_EmptyTunnels(t *testing.T) {
@@ -359,5 +426,15 @@ func assertErrContains(t *testing.T, err error, substr string) {
 	t.Helper()
 	if !strings.Contains(err.Error(), substr) {
 		t.Errorf("expected error to contain %q, got: %v", substr, err)
+	}
+}
+
+func writeConfigAtPath(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
 	}
 }

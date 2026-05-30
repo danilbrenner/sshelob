@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,8 +41,25 @@ type Config struct {
 	Tunnels []TunnelDef `yaml:"tunnels"`
 }
 
-// Load reads, parses, and validates the YAML config file at path.
+const fallbackConfigRelativePath = ".config/sshelob/config.yml"
+
+// Load reads, parses, and validates the YAML config file.
+// If path is empty, it falls back to ~/.config/sshelob/config.yml.
+// If path is set but missing, it then tries the fallback path.
 func Load(path string) (*Config, error) {
+
+	if path == "" {
+		var err error
+		path, err = defaultConfigPath()
+		if err != nil {
+			return nil, fmt.Errorf("config: determine default path: %w", err)
+		}
+	}
+
+	return loadFromPath(path)
+}
+
+func loadFromPath(path string) (*Config, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("config: cannot read file %q: %w", path, err)
@@ -104,4 +122,13 @@ func validate(cfg *Config) error {
 	}
 
 	return nil
+}
+
+func defaultConfigPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(homeDir, fallbackConfigRelativePath), nil
 }

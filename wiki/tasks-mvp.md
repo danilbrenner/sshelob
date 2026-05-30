@@ -67,12 +67,14 @@
 ## [ ] Phase 6 — Bug Fixes & Enhancements
 - [x] **Logging**: plain-text for tunnel lifecycle events (connect, reconnect, error);
 - [x] **`run all` keyword**: `sshelob run all` starts all configured tunnels
-- [ ] **Config location**: `-config` flag first, fallback to `~/.config/sshelob/config.yml`; clear error showing paths checked
+- [x] `**Config location**: `-config` flag first, fallback to `~/.config/sshelob/config.yml`; clear error showing paths checked
+- [ ] Update README with new features, config format and install/update instructions
+
+## [ ] Phase 6.1 — Connections section
 - [ ] **Connections section** (breaking change): new top-level `connections:` in config with `name`, `host`, `user`, `port`, `key_path`, `use_passphrase`; tunnels reference connection by name; inline host/user/port/key removed from `TunnelDef`
 - [ ] **Passphrase prompt**: at startup, group tunnels by connection, prompt once per connection with `use_passphrase: true`; passphrase passed by value into `TunnelFactory(conn, passphrase) ([]*Tunnel, error)`; never stored after factory returns
 - [ ] Update `Config` and `TunnelDef` structs to support connections
 - [ ] `config.Load()` validation for connection references
-- [ ] Update README with new features, config format and install/update instructions
 
 ## [ ] Phase 7 — Health Check
 - [ ] `health.Checker` — optional TCP connect probe with configurable interval and timeout
