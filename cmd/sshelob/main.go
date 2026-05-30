@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/danilbrenner/sshelob/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +48,7 @@ func newRootCommand(ctx context.Context, deps cliDeps) *cobra.Command {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&opts.configPath, "config", "config.yml", "path to YAML config file")
+	rootCmd.PersistentFlags().StringVar(&opts.configPath, "config", "", "path to YAML config file (defaults to ~/.config/sshelob/config.yml)")
 
 	rootCmd.AddCommand(versionCmd(deps))
 
@@ -63,11 +62,6 @@ func newRootCommand(ctx context.Context, deps cliDeps) *cobra.Command {
 }
 
 func main() {
-	stdoutHandler, stderrHandler := logging.Config()
-
-	logger := slog.New(logging.NewSplitHandler(stdoutHandler, stderrHandler))
-
-	slog.SetDefault(logger)
 
 	rootCmd := newRootCommand(context.Background(), cliDeps{
 		stdout: os.Stdout,

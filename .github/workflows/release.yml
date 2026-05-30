@@ -30,6 +30,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -48,12 +49,14 @@ jobs:
             exit 1
           fi
 
+          default_branch="${DEFAULT_BRANCH:-main}"
+
           git fetch --no-tags origin \
-            +refs/heads/main:refs/remotes/origin/main
+            "+refs/heads/$default_branch:refs/remotes/origin/$default_branch"
 
           if [[ "$channel" == "stable" ]]; then
-            if ! git merge-base --is-ancestor "$SHA" "origin/main"; then
-              echo "Stable tag commit is not reachable from main"
+            if ! git merge-base --is-ancestor "$SHA" "origin/$default_branch"; then
+              echo "Stable tag commit is not reachable from $default_branch"
               exit 1
             fi
           else

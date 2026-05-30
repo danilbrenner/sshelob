@@ -1,14 +1,19 @@
+connections:
+  - name: bastion-main
+    host: bastion.example.com
+    user: alice
+    port: 22
+    key_path: ~/.ssh/id_ed25519
+    use_passphrase: false
+
 tunnels:
   # Local tunnel example: forwards a local port to a remote service via SSH
   # Usage: Connect to bastion.example.com and forward localhost:5433 to db.internal:5432
   - name: local-forwarding
     type: local
-    host: bastion.example.com
-    user: alice
-    port: 22
+    connection: bastion-main
     bind_addr: "127.0.0.1:5433"
     dest_addr: "db.internal:5432"
-    key_path: ~/.ssh/id_ed25519
     health_check:
       interval: 10s
       timeout: 3s
@@ -18,12 +23,9 @@ tunnels:
   # This makes your local service accessible from the bastion machine
   - name: remote-forwarding
     type: remote
-    host: bastion.example.com
-    user: alice
-    port: 22
+    connection: bastion-main
     bind_addr: "127.0.0.1:6379"
     dest_addr: "localhost:6379"
-    key_path: ~/.ssh/id_ed25519
     health_check:
       interval: 10s
       timeout: 3s
@@ -33,9 +35,5 @@ tunnels:
   # Route traffic through the bastion to any destination
   - name: dynamic-socks-proxy
     type: dynamic
-    host: bastion.example.com
-    user: alice
-    port: 22
+    connection: bastion-main
     bind_addr: "127.0.0.1:1080"
-    key_path: ~/.ssh/id_ed25519
-
