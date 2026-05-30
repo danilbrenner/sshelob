@@ -33,6 +33,28 @@ make build
 ./build/sshelob version
 ```
 
+### Option 3: Download latest release binary
+
+Linux/macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/danilbrenner/sshelob/master/get.sh -o get.sh
+sh get.sh
+rm get.sh
+./sshelob version
+```
+
+Windows (PowerShell):
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/danilbrenner/sshelob/master/get.ps1 -OutFile get.ps1
+.\get.ps1
+Remove-Item .\get.ps1
+.\sshelob.exe version
+```
+
+Both scripts detect your OS/architecture, download the latest GitHub release asset, and unpack the binary in the current directory.
+
 ## Configuration
 
 By default, sshelob reads:
