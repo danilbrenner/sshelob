@@ -15,22 +15,21 @@ import (
 
 func TestTunnelStartStopStateTransitions(t *testing.T) {
 	tunnelDef := config.TunnelDef{
-		Name:     "test",
-		Type:     config.TunnelTypeLocal,
-		Host:     "example.com",
-		User:     "user",
-		Port:     22,
-		BindAddr: "127.0.0.1:10000",
-		DestAddr: "localhost:80",
-		KeyPath:  "~/.ssh/id_ed25519",
+		Name:       "test",
+		Type:       config.TunnelTypeLocal,
+		Connection: "shared",
+		BindAddr:   "127.0.0.1:10000",
+		DestAddr:   "localhost:80",
 	}
+	connectionDef := config.ConnectionDef{Name: "shared", Host: "example.com", User: "user", Port: 22, KeyPath: "~/.ssh/id_ed25519"}
 
 	dialStarted := make(chan struct{})
 	allowDial := make(chan struct{})
 
 	tun := NewTunnel(
+		connectionDef,
 		tunnelDef,
-		WithDialFunc(func(context.Context, config.TunnelDef) (sshClient, error) {
+		WithDialFunc(func(context.Context, config.ConnectionDef, config.TunnelDef) (sshClient, error) {
 			close(dialStarted)
 			<-allowDial
 			return &fakeSSHClient{}, nil
@@ -66,15 +65,13 @@ func TestTunnelStartStopStateTransitions(t *testing.T) {
 
 func TestTunnelReconnectBackoff(t *testing.T) {
 	tunnelDef := config.TunnelDef{
-		Name:     "backoff-test",
-		Type:     config.TunnelTypeLocal,
-		Host:     "example.com",
-		User:     "user",
-		Port:     22,
-		BindAddr: "127.0.0.1:10001",
-		DestAddr: "localhost:80",
-		KeyPath:  "~/.ssh/id_ed25519",
+		Name:       "backoff-test",
+		Type:       config.TunnelTypeLocal,
+		Connection: "shared",
+		BindAddr:   "127.0.0.1:10001",
+		DestAddr:   "localhost:80",
 	}
+	connectionDef := config.ConnectionDef{Name: "shared", Host: "example.com", User: "user", Port: 22, KeyPath: "~/.ssh/id_ed25519"}
 
 	var (
 		mu       sync.Mutex
@@ -83,8 +80,9 @@ func TestTunnelReconnectBackoff(t *testing.T) {
 	)
 
 	tun = NewTunnel(
+		connectionDef,
 		tunnelDef,
-		WithDialFunc(func(context.Context, config.TunnelDef) (sshClient, error) {
+		WithDialFunc(func(context.Context, config.ConnectionDef, config.TunnelDef) (sshClient, error) {
 			return nil, errors.New("dial failed")
 		}),
 		WithSleepFunc(func(ctx context.Context, delay time.Duration) error {
@@ -152,23 +150,22 @@ func TestRingBufferWraps(t *testing.T) {
 
 func TestTunnelWritesPlainTextLifecycleEvents(t *testing.T) {
 	tunnelDef := config.TunnelDef{
-		Name:     "writer-test",
-		Type:     config.TunnelTypeLocal,
-		Host:     "example.com",
-		User:     "user",
-		Port:     22,
-		BindAddr: "127.0.0.1:10002",
-		DestAddr: "localhost:80",
-		KeyPath:  "~/.ssh/id_ed25519",
+		Name:       "writer-test",
+		Type:       config.TunnelTypeLocal,
+		Connection: "shared",
+		BindAddr:   "127.0.0.1:10002",
+		DestAddr:   "localhost:80",
 	}
+	connectionDef := config.ConnectionDef{Name: "shared", Host: "example.com", User: "user", Port: 22, KeyPath: "~/.ssh/id_ed25519"}
 
 	var output bytes.Buffer
 	var tun *Tunnel
 
 	tun = NewTunnel(
+		connectionDef,
 		tunnelDef,
 		WithEventWriter(&output),
-		WithDialFunc(func(context.Context, config.TunnelDef) (sshClient, error) {
+		WithDialFunc(func(context.Context, config.ConnectionDef, config.TunnelDef) (sshClient, error) {
 			return &fakeSSHClient{}, nil
 		}),
 		WithForwardFunc(func(context.Context, *Tunnel, sshClient, config.TunnelDef) error {

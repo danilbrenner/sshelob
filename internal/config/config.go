@@ -25,20 +25,27 @@ type HealthCheckDef struct {
 	Timeout string `yaml:"timeout"`
 }
 
+type ConnectionDef struct {
+	Name          string `yaml:"name"`
+	Host          string `yaml:"host"`
+	User          string `yaml:"user"`
+	Port          int    `yaml:"port"`
+	KeyPath       string `yaml:"key_path"`
+	UsePassphrase bool   `yaml:"use_passphrase"`
+}
+
 type TunnelDef struct {
 	Type        TunnelType      `yaml:"type"`
 	Name        string          `yaml:"name"`
-	Host        string          `yaml:"host"`
-	User        string          `yaml:"user"`
-	Port        int             `yaml:"port"`
+	Connection  string          `yaml:"connection"`
 	BindAddr    string          `yaml:"bind_addr"`
 	DestAddr    string          `yaml:"dest_addr"`
-	KeyPath     string          `yaml:"key_path"`
 	HealthCheck *HealthCheckDef `yaml:"health_check,omitempty"`
 }
 
 type Config struct {
-	Tunnels []TunnelDef `yaml:"tunnels"`
+	Connections []ConnectionDef `yaml:"connections"`
+	Tunnels     []TunnelDef     `yaml:"tunnels"`
 }
 
 const fallbackConfigRelativePath = ".config/sshelob/config.yml"
@@ -79,8 +86,37 @@ func loadFromPath(path string) (*Config, error) {
 
 // validate checks all required fields in every tunnel definition.
 func validate(cfg *Config) error {
+	if len(cfg.Connections) == 0 {
+		return fmt.Errorf("config: connections: must define at least one connection")
+	}
 	if len(cfg.Tunnels) == 0 {
 		return fmt.Errorf("config: tunnels: must define at least one tunnel")
+	}
+
+	connectionsByName := make(map[string]ConnectionDef, len(cfg.Connections))
+	for index, connectionDef := range cfg.Connections {
+		prefix := fmt.Sprintf("config: connections[%d]", index)
+
+		if connectionDef.Name == "" {
+			return fmt.Errorf("%s.name: required field is missing", prefix)
+		}
+		if connectionDef.Host == "" {
+			return fmt.Errorf("%s.host: required field is missing", prefix)
+		}
+		if connectionDef.User == "" {
+			return fmt.Errorf("%s.user: required field is missing", prefix)
+		}
+		if connectionDef.Port == 0 {
+			return fmt.Errorf("%s.port: required field is missing or zero", prefix)
+		}
+		if connectionDef.KeyPath == "" {
+			return fmt.Errorf("%s.key_path: required field is missing", prefix)
+		}
+		if _, exists := connectionsByName[connectionDef.Name]; exists {
+			return fmt.Errorf("%s.name: duplicate connection name %q", prefix, connectionDef.Name)
+		}
+
+		connectionsByName[connectionDef.Name] = connectionDef
 	}
 
 	for index, tunnelDef := range cfg.Tunnels {
@@ -98,14 +134,11 @@ func validate(cfg *Config) error {
 			return fmt.Errorf("%s.type: unknown tunnel type %q (must be local, remote, or dynamic)", prefix, tunnelDef.Type)
 		}
 
-		if tunnelDef.Host == "" {
-			return fmt.Errorf("%s.host: required field is missing", prefix)
+		if tunnelDef.Connection == "" {
+			return fmt.Errorf("%s.connection: required field is missing", prefix)
 		}
-		if tunnelDef.User == "" {
-			return fmt.Errorf("%s.user: required field is missing", prefix)
-		}
-		if tunnelDef.Port == 0 {
-			return fmt.Errorf("%s.port: required field is missing or zero", prefix)
+		if _, exists := connectionsByName[tunnelDef.Connection]; !exists {
+			return fmt.Errorf("%s.connection: unknown connection %q", prefix, tunnelDef.Connection)
 		}
 		if tunnelDef.BindAddr == "" {
 			return fmt.Errorf("%s.bind_addr: required field is missing", prefix)
@@ -131,4 +164,14 @@ func defaultConfigPath() (string, error) {
 	}
 
 	return filepath.Join(homeDir, fallbackConfigRelativePath), nil
+}
+
+func (c *Config) ConnectionByName(name string) (ConnectionDef, bool) {
+	for _, connectionDef := range c.Connections {
+		if connectionDef.Name == name {
+			return connectionDef, true
+		}
+	}
+
+	return ConnectionDef{}, false
 }

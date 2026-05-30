@@ -94,17 +94,19 @@ func writeListConfig(t *testing.T) string {
 	content := `tunnels:
   - name: app-db
     type: local
-    host: bastion.internal
-    user: alice
-    port: 22
+    connection: shared
     bind_addr: 127.0.0.1:5433
     dest_addr: db.internal:5432
   - name: socks
     type: dynamic
+    connection: shared
+    bind_addr: 127.0.0.1:1080
+connections:
+  - name: shared
     host: bastion.internal
     user: alice
     port: 22
-    bind_addr: 127.0.0.1:1080
+    key_path: ~/.ssh/id_ed25519
 `
 
 	configPath := filepath.Join(t.TempDir(), "config.yml")

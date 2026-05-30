@@ -3,6 +3,7 @@ package tunnel
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -84,7 +85,7 @@ type sshClient interface {
 	Close() error
 }
 
-type dialFunc func(context.Context, config.TunnelDef) (sshClient, error)
+type dialFunc func(context.Context, config.ConnectionDef, config.TunnelDef) (sshClient, error)
 type forwardFunc func(context.Context, *Tunnel, sshClient, config.TunnelDef) error
 type sleepFunc func(context.Context, time.Duration) error
 
@@ -121,6 +122,7 @@ func WithEventWriter(writer io.Writer) Option {
 }
 
 type Tunnel struct {
+	conn      config.ConnectionDef
 	def       config.TunnelDef
 	logBuffer *RingBuffer
 	eventsOut io.Writer
@@ -138,8 +140,9 @@ type Tunnel struct {
 	sleep   sleepFunc
 }
 
-func NewTunnel(def config.TunnelDef, opts ...Option) *Tunnel {
+func NewTunnel(conn config.ConnectionDef, def config.TunnelDef, opts ...Option) *Tunnel {
 	tunnel := &Tunnel{
+		conn:      conn,
 		def:       def,
 		logBuffer: NewRingBuffer(defaultLogCapacity),
 		eventsOut: io.Discard,
@@ -226,7 +229,7 @@ func (t *Tunnel) run(ctx context.Context) error {
 			t.setState(Reconnecting)
 		}
 
-		client, err := t.dial(ctx, t.def)
+		client, err := t.dial(ctx, t.conn, t.def)
 		if err != nil {
 			t.setState(Error)
 			t.logf("dial failed: %v", err)
@@ -313,8 +316,37 @@ func defaultSleep(ctx context.Context, duration time.Duration) error {
 	}
 }
 
-func defaultDial(ctx context.Context, def config.TunnelDef) (sshClient, error) {
-	keyPath, err := expandPath(def.KeyPath)
+func defaultDial(ctx context.Context, conn config.ConnectionDef, _ config.TunnelDef) (sshClient, error) {
+	signer, err := signerFromConnection(conn, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return dialWithSigner(ctx, conn, signer)
+}
+
+func TunnelFactory(conn config.ConnectionDef, passphrase string, tunnelDefs []config.TunnelDef, opts ...Option) ([]*Tunnel, error) {
+	signer, err := signerFromConnection(conn, passphrase)
+	if err != nil {
+		return nil, err
+	}
+
+	factoryOpts := make([]Option, 0, len(opts)+1)
+	factoryOpts = append(factoryOpts, WithDialFunc(func(ctx context.Context, connectionDef config.ConnectionDef, _ config.TunnelDef) (sshClient, error) {
+		return dialWithSigner(ctx, connectionDef, signer)
+	}))
+	factoryOpts = append(factoryOpts, opts...)
+
+	tunnels := make([]*Tunnel, 0, len(tunnelDefs))
+	for _, tunnelDef := range tunnelDefs {
+		tunnels = append(tunnels, NewTunnel(conn, tunnelDef, factoryOpts...))
+	}
+
+	return tunnels, nil
+}
+
+func signerFromConnection(conn config.ConnectionDef, passphrase string) (ssh.Signer, error) {
+	keyPath, err := expandPath(conn.KeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("expand key path: %w", err)
 	}
@@ -324,30 +356,55 @@ func defaultDial(ctx context.Context, def config.TunnelDef) (sshClient, error) {
 		return nil, fmt.Errorf("read key file %q: %w", keyPath, err)
 	}
 
+	passphraseBytes := []byte(passphrase)
+	defer zeroBytes(passphraseBytes)
+
+	if len(passphraseBytes) > 0 {
+		signer, parseErr := ssh.ParsePrivateKeyWithPassphrase(key, passphraseBytes)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse private key %q with passphrase: %w", keyPath, parseErr)
+		}
+		return signer, nil
+	}
+
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
+		var passphraseRequired *ssh.PassphraseMissingError
+		if errors.As(err, &passphraseRequired) {
+			return nil, fmt.Errorf("parse private key %q: key is passphrase-protected", keyPath)
+		}
 		return nil, fmt.Errorf("parse private key %q: %w", keyPath, err)
 	}
 
-	addr := net.JoinHostPort(def.Host, strconv.Itoa(def.Port))
+	return signer, nil
+}
+
+func dialWithSigner(ctx context.Context, conn config.ConnectionDef, signer ssh.Signer) (sshClient, error) {
+	addr := net.JoinHostPort(conn.Host, strconv.Itoa(conn.Port))
 	clientConfig := &ssh.ClientConfig{
-		User:            def.User,
+		User:            conn.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	tcpConn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("dial ssh target %s: %w", addr, err)
 	}
 
-	clientConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
+	clientConn, chans, reqs, err := ssh.NewClientConn(tcpConn, addr, clientConfig)
 	if err != nil {
-		_ = conn.Close()
+		_ = tcpConn.Close()
 		return nil, fmt.Errorf("create ssh client connection: %w", err)
 	}
 
 	return ssh.NewClient(clientConn, chans, reqs), nil
+}
+
+func zeroBytes(raw []byte) {
+	for i := range raw {
+		raw[i] = 0
+	}
 }
 
 func expandPath(path string) (string, error) {

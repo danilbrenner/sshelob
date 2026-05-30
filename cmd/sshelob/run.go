@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 	"github.com/danilbrenner/sshelob/internal/config"
 	"github.com/danilbrenner/sshelob/internal/tunnel"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func runCmd(ctx context.Context, opts *cliOptions) *cobra.Command {
@@ -36,7 +39,12 @@ func runCmd(ctx context.Context, opts *cliOptions) *cobra.Command {
 				return err
 			}
 
-			return runTunnels(ctx, selected)
+			tunnels, err := buildTunnelsWithConnections(cfg, selected, os.Stdin, os.Stdout)
+			if err != nil {
+				return err
+			}
+
+			return runTunnels(ctx, tunnels)
 		},
 	}
 }
@@ -105,21 +113,98 @@ func selectTunnels(cfg *config.Config, selection runSelection) ([]config.TunnelD
 	return selected, nil
 }
 
-func runTunnels(ctx context.Context, defs []config.TunnelDef) error {
+type namedTunnel struct {
+	name   string
+	tunnel *tunnel.Tunnel
+}
+
+func buildTunnelsWithConnections(cfg *config.Config, defs []config.TunnelDef, in io.Reader, out io.Writer) ([]namedTunnel, error) {
+	orderedConnections, groupedTunnelDefs, err := groupTunnelsByConnection(cfg, defs)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]namedTunnel, 0, len(defs))
+	inputReader := bufio.NewReader(in)
+
+	for _, connectionDef := range orderedConnections {
+		passphrase := ""
+		if connectionDef.UsePassphrase {
+			passphrase, err = promptPassphrase(in, inputReader, out, connectionDef.Name)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		tunnelDefs := groupedTunnelDefs[connectionDef.Name]
+		created, factoryErr := tunnel.TunnelFactory(connectionDef, passphrase, tunnelDefs, tunnel.WithEventWriter(os.Stdout))
+		passphrase = ""
+		if factoryErr != nil {
+			return nil, fmt.Errorf("connection %q: %w", connectionDef.Name, factoryErr)
+		}
+
+		for i, createdTunnel := range created {
+			result = append(result, namedTunnel{name: tunnelDefs[i].Name, tunnel: createdTunnel})
+		}
+	}
+
+	return result, nil
+}
+
+func groupTunnelsByConnection(cfg *config.Config, defs []config.TunnelDef) ([]config.ConnectionDef, map[string][]config.TunnelDef, error) {
+	groupedTunnelDefs := make(map[string][]config.TunnelDef)
+	for _, tunnelDef := range defs {
+		groupedTunnelDefs[tunnelDef.Connection] = append(groupedTunnelDefs[tunnelDef.Connection], tunnelDef)
+	}
+
+	orderedConnections := make([]config.ConnectionDef, 0, len(groupedTunnelDefs))
+	for _, connectionDef := range cfg.Connections {
+		if _, used := groupedTunnelDefs[connectionDef.Name]; used {
+			orderedConnections = append(orderedConnections, connectionDef)
+		}
+	}
+
+	if len(orderedConnections) != len(groupedTunnelDefs) {
+		return nil, nil, fmt.Errorf("failed to resolve selected tunnel connections")
+	}
+
+	return orderedConnections, groupedTunnelDefs, nil
+}
+
+func promptPassphrase(in io.Reader, inputReader *bufio.Reader, out io.Writer, connectionName string) (string, error) {
+	if _, err := fmt.Fprintf(out, "passphrase for connection %q: ", connectionName); err != nil {
+		return "", fmt.Errorf("write passphrase prompt: %w", err)
+	}
+
+	if stdinFile, ok := in.(*os.File); ok && term.IsTerminal(int(stdinFile.Fd())) {
+		raw, err := term.ReadPassword(int(stdinFile.Fd()))
+		if _, newlineErr := fmt.Fprintln(out); newlineErr != nil {
+			return "", fmt.Errorf("write passphrase prompt newline: %w", newlineErr)
+		}
+		if err != nil {
+			return "", fmt.Errorf("read passphrase: %w", err)
+		}
+		return string(raw), nil
+	}
+
+	passphrase, err := inputReader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("read passphrase: %w", err)
+	}
+
+	return strings.TrimRight(passphrase, "\r\n"), nil
+}
+
+func runTunnels(ctx context.Context, tunnels []namedTunnel) error {
 	runCtx, stopSignal := signal.NotifyContext(ctx, os.Interrupt)
 	defer stopSignal()
-
-	tunnels := make([]*tunnel.Tunnel, 0, len(defs))
-	for _, tunnelDef := range defs {
-		tunnels = append(tunnels, tunnel.NewTunnel(tunnelDef, tunnel.WithEventWriter(os.Stdout)))
-	}
 
 	errCh := make(chan error, len(tunnels))
 	var wg sync.WaitGroup
 
-	for i, tnl := range tunnels {
-		tnl := tnl
-		name := defs[i].Name
+	for _, named := range tunnels {
+		tnl := named.tunnel
+		name := named.name
 		wg.Add(1)
 		go func(name string, tnl *tunnel.Tunnel) {
 			defer wg.Done()
@@ -138,9 +223,9 @@ func runTunnels(ctx context.Context, defs []config.TunnelDef) error {
 		return fmt.Errorf("write stop status: %w", err)
 	}
 
-	for i, tnl := range tunnels {
-		if err := tnl.Stop(); err != nil {
-			errCh <- fmt.Errorf("tunnel %q stop failed: %w", defs[i].Name, err)
+	for _, named := range tunnels {
+		if err := named.tunnel.Stop(); err != nil {
+			errCh <- fmt.Errorf("tunnel %q stop failed: %w", named.name, err)
 		}
 	}
 
