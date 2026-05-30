@@ -8,8 +8,10 @@ CLI-first SSH tunnel manager for local, remote, and dynamic forwards.
 ## Features
 
 - Manage multiple SSH tunnels from one config file
+- Reuse named SSH connections across multiple tunnels
 - Tunnel types: `local`, `remote`, `dynamic`
 - `sshelob run all` or `sshelob run 1,2,3` to start selected tunnels
+- Optional passphrase prompts for encrypted SSH private keys (once per connection)
 - Plain-text lifecycle logging to stdout (connect, reconnect, error)
 - Exponential auto-reconnect (1s initial, 2x backoff, max 30s, retries until stopped)
 - Commands: `list`, `run`, `version`, `update`
@@ -46,33 +48,40 @@ sshelob --config /path/to/config.yml list
 ### Config format
 
 ```yaml
-tunnels:
-  - name: postgres-local
-    type: local
+connections:
+  - name: bastion-main
     host: bastion.example.com
     user: alice
     port: 22
+    key_path: ~/.ssh/id_ed25519
+    use_passphrase: false
+
+tunnels:
+  - name: postgres-local
+    type: local
+    connection: bastion-main
     bind_addr: "127.0.0.1:5433"
     dest_addr: "db.internal:5432"
-    key_path: ~/.ssh/id_ed25519
     health_check:
       interval: 10s
       timeout: 3s
 
   - name: socks-proxy
     type: dynamic
-    host: bastion.example.com
-    user: alice
-    port: 22
+    connection: bastion-main
     bind_addr: "127.0.0.1:1080"
-    key_path: ~/.ssh/id_ed25519
 ```
 
 Field notes:
 
+- `connections` must include at least one named SSH connection
+- connection fields: `name`, `host`, `user`, `port`, `key_path`, and optional `use_passphrase`
+- each tunnel must set `connection` to a valid connection name
 - `type` must be one of `local`, `remote`, or `dynamic`
 - `dest_addr` is required for `local` and `remote`; it must be omitted for `dynamic`
 - `bind_addr` is the local bind for `local`/`dynamic` and the remote bind for `remote`
+
+If `use_passphrase: true` is set on a connection, `sshelob run ...` prompts for that connection passphrase before starting its tunnels.
 
 ## Usage
 
